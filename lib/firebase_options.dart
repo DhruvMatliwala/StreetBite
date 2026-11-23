@@ -3,7 +3,15 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 
 /// Firebase configuration options for the `streetbite-c4058` project.
+///
+/// Supply the Android API key at build time via:
+/// `--dart-define=FIREBASE_API_KEY=your_key`
 class DefaultFirebaseOptions {
+  static const String _androidApiKey =
+      String.fromEnvironment('FIREBASE_API_KEY');
+
+  static bool get isConfigured => _androidApiKey.isNotEmpty;
+
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
       throw UnsupportedError(
@@ -19,7 +27,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBSOv_n5oZ2ppeU8ckhzijGIo6CtHvFo3s',
+    apiKey: _androidApiKey,
     appId: '1:794338384277:android:48f180a3226a4270117e9c',
     messagingSenderId: '794338384277',
     projectId: 'streetbite-c4058',

@@ -19,6 +19,9 @@ Future<void> main() async {
 
   var isDemoMode = false;
   try {
+    if (!DefaultFirebaseOptions.isConfigured) {
+      throw StateError('FIREBASE_API_KEY not provided via --dart-define.');
+    }
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
