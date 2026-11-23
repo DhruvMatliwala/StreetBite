@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:streetbite/core/constants/app_constants.dart';
 import 'package:streetbite/core/theme/app_theme.dart';
+import 'package:streetbite/firebase_options.dart';
 import 'package:streetbite/providers/auth_provider.dart';
 import 'package:streetbite/providers/stall_provider.dart';
 import 'package:streetbite/providers/vendor_provider.dart';
@@ -18,7 +19,9 @@ Future<void> main() async {
 
   var isDemoMode = false;
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (e) {
     isDemoMode = true;
     debugPrint(
