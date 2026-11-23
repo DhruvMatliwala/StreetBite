@@ -34,10 +34,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Gradle Wrapper
-        working-directory: android
-        run: gradle wrapper --gradle-version 8.9
-
       - name: Install Dependencies
         run: flutter pub get
 
@@ -47,7 +43,16 @@ jobs:
       - name: Run Unit Tests
         run: flutter test
 
+      - name: Generate Gradle Wrapper
+        working-directory: android
+        run: |
+          FLUTTER_SDK="${FLUTTER_ROOT:-$(dirname "$(dirname "$(which flutter)")")}"
+          echo "flutter.sdk=$FLUTTER_SDK" > local.properties
+          gradle wrapper --gradle-version 8.9
+
       - name: Build Release APK
+        env:
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
         run: flutter build apk --release
 
       - name: Upload APK Artifact
