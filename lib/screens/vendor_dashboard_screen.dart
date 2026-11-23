@@ -6,6 +6,7 @@ import 'package:streetbite/providers/auth_provider.dart';
 import 'package:streetbite/providers/stall_provider.dart';
 import 'package:streetbite/providers/vendor_provider.dart';
 import 'package:streetbite/screens/add_edit_stall_screen.dart';
+import 'package:streetbite/screens/profile_screen.dart';
 import 'package:streetbite/widgets/stall_card.dart';
 import 'package:streetbite/widgets/status_pill.dart';
 import 'package:streetbite/widgets/streetbite_logo.dart';
@@ -40,6 +41,34 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
     if (saved != null && mounted) {
       context.read<StallProvider>().syncStallUpdate(saved);
     }
+  }
+
+  Future<void> _openAuthSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.viewInsetsOf(sheetContext).bottom;
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.md,
+            bottomInset + AppSpacing.lg,
+          ),
+          child: AuthFormCard(
+            initialRegisterMode: true,
+            onAuthenticated: () {
+              Navigator.of(sheetContext).pop();
+              final vendorId = context.read<AuthProvider>().effectiveVendorId;
+              if (vendorId.isNotEmpty) {
+                context.read<VendorProvider>().loadVendorStalls(vendorId);
+              }
+            },
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _confirmDelete(Stall stall) async {
@@ -120,7 +149,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      'Sign in to manage your street food cart',
+                      'Register or sign in to manage your street food stall',
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -128,6 +157,12 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     FilledButton.icon(
+                      onPressed: _openAuthSheet,
+                      icon: const Icon(Icons.person_add_rounded),
+                      label: const Text('Create Account / Sign In'),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    OutlinedButton.icon(
                       onPressed: () async {
                         await auth.signInAnonymously();
                         if (!mounted) return;

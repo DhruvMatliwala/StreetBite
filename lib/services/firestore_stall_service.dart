@@ -9,7 +9,7 @@ import 'package:streetbite/utils/geohash_util.dart';
 
 enum StallSortOrder { distance, rating }
 
-/// Dual-mode service querying Cloud Firestore or in-memory Demo data.
+/// Dual-mode service querying Cloud Firestore with graceful local sample fallback.
 class FirestoreStallService {
   FirestoreStallService({
     required this.isDemoMode,
@@ -22,6 +22,7 @@ class FirestoreStallService {
   final List<Stall> _demoStalls = MockStallData.buildInitialStalls();
   final Map<String, List<Review>> _demoReviews =
       MockStallData.buildInitialReviews();
+  bool _hasLocalWrites = false;
 
   CollectionReference<Map<String, dynamic>> get _stallsRef {
     final db = _firestore ?? FirebaseFirestore.instance;
@@ -43,7 +44,7 @@ class FirestoreStallService {
       await Future<void>.delayed(const Duration(milliseconds: 220));
       candidateStalls = List<Stall>.from(_demoStalls);
     } else {
-      var liveStalls = <Stall>[];
+      final merged = <String, Stall>{};
       try {
         final ranges = GeohashUtil.queryBounds(userLat, userLng, radiusKm);
         final futures = ranges.map((range) {
@@ -58,21 +59,23 @@ class FirestoreStallService {
         });
 
         final snapshots = await Future.wait(futures);
-        final deduplicated = <String, Stall>{};
         for (final snapshot in snapshots) {
           for (final doc in snapshot.docs) {
             final data = Map<String, dynamic>.from(doc.data());
             data['id'] = doc.id;
-            deduplicated[doc.id] = Stall.fromJson(data);
+            merged[doc.id] = Stall.fromJson(data);
           }
         }
-        liveStalls = deduplicated.values.toList();
       } catch (e) {
         debugPrint('Firestore query fallback to sample stalls: $e');
       }
 
-      candidateStalls =
-          liveStalls.isNotEmpty ? liveStalls : List<Stall>.from(_demoStalls);
+      if (merged.isEmpty || _hasLocalWrites) {
+        for (final stall in _demoStalls) {
+          merged.putIfAbsent(stall.id, () => stall);
+        }
+      }
+      candidateStalls = merged.values.toList();
     }
 
     final normalizedQuery = cravingQuery.trim().toLowerCase();
@@ -117,46 +120,68 @@ class FirestoreStallService {
   Future<List<Stall>> fetchVendorStalls(String vendorId) async {
     if (isDemoMode) {
       await Future<void>.delayed(const Duration(milliseconds: 180));
-      final owned = _demoStalls
-          .where((stall) => stall.vendorId == vendorId)
-          .toList()
-        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      return owned;
+      return _localVendorStalls(vendorId);
     }
 
-    final snapshot = await _stallsRef
-        .where('vendorId', isEqualTo: vendorId)
-        .orderBy('updatedAt', descending: true)
-        .get();
+    try {
+      final snapshot = await _stallsRef
+          .where('vendorId', isEqualTo: vendorId)
+          .orderBy('updatedAt', descending: true)
+          .get();
 
-    return snapshot.docs.map((doc) {
-      final data = Map<String, dynamic>.from(doc.data());
-      data['id'] = doc.id;
-      return Stall.fromJson(data);
-    }).toList();
+      final live = snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+        return Stall.fromJson(data);
+      }).toList();
+
+      if (live.isNotEmpty) return live;
+    } catch (e) {
+      debugPrint('Vendor Firestore query fallback: $e');
+    }
+
+    return _localVendorStalls(vendorId);
   }
 
-  /// Immediately updates a stall's Open/Closed status in Firestore or Demo state.
+  List<Stall> _localVendorStalls(String vendorId) {
+    final owned = _demoStalls
+        .where((stall) => stall.vendorId == vendorId)
+        .toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return owned;
+  }
+
+  /// Immediately updates a stall's Open/Closed status in Firestore or local fallback.
   Future<void> toggleStallOpenStatus({
     required String stallId,
     required bool isOpen,
   }) async {
     final now = DateTime.now();
     if (isDemoMode) {
-      final index = _demoStalls.indexWhere((s) => s.id == stallId);
-      if (index != -1) {
-        _demoStalls[index] = _demoStalls[index].copyWith(
-          isOpen: isOpen,
-          updatedAt: now,
-        );
-      }
+      _updateLocalStallStatus(stallId, isOpen, now);
       return;
     }
 
-    await _stallsRef.doc(stallId).update(<String, dynamic>{
-      'isOpen': isOpen,
-      'updatedAt': Timestamp.fromDate(now),
-    });
+    try {
+      await _stallsRef.doc(stallId).update(<String, dynamic>{
+        'isOpen': isOpen,
+        'updatedAt': Timestamp.fromDate(now),
+      });
+    } catch (e) {
+      debugPrint('Toggle status fallback to local state: $e');
+      _hasLocalWrites = true;
+      _updateLocalStallStatus(stallId, isOpen, now);
+    }
+  }
+
+  void _updateLocalStallStatus(String stallId, bool isOpen, DateTime now) {
+    final index = _demoStalls.indexWhere((s) => s.id == stallId);
+    if (index != -1) {
+      _demoStalls[index] = _demoStalls[index].copyWith(
+        isOpen: isOpen,
+        updatedAt: now,
+      );
+    }
   }
 
   /// Creates or updates a stall document and returns the persisted [Stall].
@@ -185,22 +210,33 @@ class FirestoreStallService {
     );
 
     if (isDemoMode) {
-      final index = _demoStalls.indexWhere((s) => s.id == docId);
-      if (index == -1) {
-        _demoStalls.insert(0, prepared);
-      } else {
-        _demoStalls[index] = prepared;
-      }
+      _upsertLocalStall(prepared);
       return prepared;
     }
 
-    final payload = _stallToFirestoreMap(prepared);
-    if (isCreate) {
-      await _stallsRef.doc(docId).set(payload);
-    } else {
-      await _stallsRef.doc(docId).update(payload);
+    try {
+      final payload = _stallToFirestoreMap(prepared);
+      if (isCreate) {
+        await _stallsRef.doc(docId).set(payload);
+      } else {
+        await _stallsRef.doc(docId).update(payload);
+      }
+      return prepared;
+    } catch (e) {
+      debugPrint('Upsert stall fallback to local state: $e');
+      _hasLocalWrites = true;
+      _upsertLocalStall(prepared);
+      return prepared;
     }
-    return prepared;
+  }
+
+  void _upsertLocalStall(Stall prepared) {
+    final index = _demoStalls.indexWhere((s) => s.id == prepared.id);
+    if (index == -1) {
+      _demoStalls.insert(0, prepared);
+    } else {
+      _demoStalls[index] = prepared;
+    }
   }
 
   Future<void> deleteStall(String stallId) async {
@@ -208,28 +244,45 @@ class FirestoreStallService {
       _demoStalls.removeWhere((s) => s.id == stallId);
       return;
     }
-    await _stallsRef.doc(stallId).delete();
+    try {
+      await _stallsRef.doc(stallId).delete();
+    } catch (e) {
+      debugPrint('Delete stall fallback to local state: $e');
+      _hasLocalWrites = true;
+      _demoStalls.removeWhere((s) => s.id == stallId);
+    }
   }
 
   Future<List<Review>> fetchReviews(String stallId) async {
     if (isDemoMode) {
-      final reviews = _demoReviews[stallId] ?? <Review>[];
-      return List<Review>.from(reviews)
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return _localReviews(stallId);
     }
 
-    final snapshot = await _stallsRef
-        .doc(stallId)
-        .collection('reviews')
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .get();
+    try {
+      final snapshot = await _stallsRef
+          .doc(stallId)
+          .collection('reviews')
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .get();
 
-    return snapshot.docs.map((doc) {
-      final data = Map<String, dynamic>.from(doc.data());
-      data['id'] = doc.id;
-      return Review.fromJson(data);
-    }).toList();
+      final live = snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+        return Review.fromJson(data);
+      }).toList();
+      if (live.isNotEmpty) return live;
+    } catch (e) {
+      debugPrint('Fetch reviews fallback: $e');
+    }
+
+    return _localReviews(stallId);
+  }
+
+  List<Review> _localReviews(String stallId) {
+    final reviews = _demoReviews[stallId] ?? <Review>[];
+    return List<Review>.from(reviews)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   /// Adds a community review and updates aggregate taste/hygiene ratings.
@@ -237,80 +290,90 @@ class FirestoreStallService {
     final now = DateTime.now();
 
     if (isDemoMode) {
-      final list =
-          _demoReviews.putIfAbsent(review.stallId, () => <Review>[]);
-      final saved = review.copyWith(
-        id: 'rev-${now.millisecondsSinceEpoch}',
-        createdAt: now,
-      );
-      list.insert(0, saved);
-
-      final stallIdx = _demoStalls.indexWhere((s) => s.id == review.stallId);
-      if (stallIdx == -1) return null;
-      final existing = _demoStalls[stallIdx];
-      final nextCount = existing.reviewCount + 1;
-      final nextTaste =
-          ((existing.tasteRating * existing.reviewCount) + review.tasteRating) /
-              nextCount;
-      final nextHygiene =
-          ((existing.hygieneRating * existing.reviewCount) +
-                  review.hygieneRating) /
-              nextCount;
-      final updated = existing.copyWith(
-        tasteRating: double.parse(nextTaste.toStringAsFixed(2)),
-        hygieneRating: double.parse(nextHygiene.toStringAsFixed(2)),
-        reviewCount: nextCount,
-        updatedAt: now,
-      );
-      _demoStalls[stallIdx] = updated;
-      return updated;
+      return _addLocalReview(review, now);
     }
 
-    final db = _firestore ?? FirebaseFirestore.instance;
-    final stallRef = _stallsRef.doc(review.stallId);
-    final reviewRef = stallRef.collection('reviews').doc();
+    try {
+      final db = _firestore ?? FirebaseFirestore.instance;
+      final stallRef = _stallsRef.doc(review.stallId);
+      final reviewRef = stallRef.collection('reviews').doc();
 
-    return db.runTransaction<Stall?>((transaction) async {
-      final stallSnap = await transaction.get(stallRef);
-      if (!stallSnap.exists || stallSnap.data() == null) return null;
+      return await db.runTransaction<Stall?>((transaction) async {
+        final stallSnap = await transaction.get(stallRef);
+        if (!stallSnap.exists || stallSnap.data() == null) return null;
 
-      final data = Map<String, dynamic>.from(stallSnap.data()!);
-      data['id'] = stallSnap.id;
-      final existing = Stall.fromJson(data);
+        final data = Map<String, dynamic>.from(stallSnap.data()!);
+        data['id'] = stallSnap.id;
+        final existing = Stall.fromJson(data);
 
-      final nextCount = existing.reviewCount + 1;
-      final nextTaste =
-          ((existing.tasteRating * existing.reviewCount) + review.tasteRating) /
-              nextCount;
-      final nextHygiene =
-          ((existing.hygieneRating * existing.reviewCount) +
-                  review.hygieneRating) /
-              nextCount;
+        final nextCount = existing.reviewCount + 1;
+        final nextTaste =
+            ((existing.tasteRating * existing.reviewCount) +
+                    review.tasteRating) /
+                nextCount;
+        final nextHygiene =
+            ((existing.hygieneRating * existing.reviewCount) +
+                    review.hygieneRating) /
+                nextCount;
 
-      transaction.set(reviewRef, <String, dynamic>{
-        'stallId': review.stallId,
-        'authorUid': review.authorUid,
-        'authorName': review.authorName,
-        'tasteRating': review.tasteRating,
-        'hygieneRating': review.hygieneRating,
-        'comment': review.comment,
-        'createdAt': Timestamp.fromDate(now),
+        transaction.set(reviewRef, <String, dynamic>{
+          'stallId': review.stallId,
+          'authorUid': review.authorUid,
+          'authorName': review.authorName,
+          'tasteRating': review.tasteRating,
+          'hygieneRating': review.hygieneRating,
+          'comment': review.comment,
+          'createdAt': Timestamp.fromDate(now),
+        });
+
+        transaction.update(stallRef, <String, dynamic>{
+          'tasteRating': double.parse(nextTaste.toStringAsFixed(2)),
+          'hygieneRating': double.parse(nextHygiene.toStringAsFixed(2)),
+          'reviewCount': nextCount,
+          'updatedAt': Timestamp.fromDate(now),
+        });
+
+        return existing.copyWith(
+          tasteRating: double.parse(nextTaste.toStringAsFixed(2)),
+          hygieneRating: double.parse(nextHygiene.toStringAsFixed(2)),
+          reviewCount: nextCount,
+          updatedAt: now,
+        );
       });
+    } catch (e) {
+      debugPrint('Add review fallback to local state: $e');
+      _hasLocalWrites = true;
+      return _addLocalReview(review, now);
+    }
+  }
 
-      transaction.update(stallRef, <String, dynamic>{
-        'tasteRating': double.parse(nextTaste.toStringAsFixed(2)),
-        'hygieneRating': double.parse(nextHygiene.toStringAsFixed(2)),
-        'reviewCount': nextCount,
-        'updatedAt': Timestamp.fromDate(now),
-      });
+  Stall? _addLocalReview(Review review, DateTime now) {
+    final list = _demoReviews.putIfAbsent(review.stallId, () => <Review>[]);
+    final saved = review.copyWith(
+      id: 'rev-${now.millisecondsSinceEpoch}',
+      createdAt: now,
+    );
+    list.insert(0, saved);
 
-      return existing.copyWith(
-        tasteRating: double.parse(nextTaste.toStringAsFixed(2)),
-        hygieneRating: double.parse(nextHygiene.toStringAsFixed(2)),
-        reviewCount: nextCount,
-        updatedAt: now,
-      );
-    });
+    final stallIdx = _demoStalls.indexWhere((s) => s.id == review.stallId);
+    if (stallIdx == -1) return null;
+    final existing = _demoStalls[stallIdx];
+    final nextCount = existing.reviewCount + 1;
+    final nextTaste =
+        ((existing.tasteRating * existing.reviewCount) + review.tasteRating) /
+            nextCount;
+    final nextHygiene =
+        ((existing.hygieneRating * existing.reviewCount) +
+                review.hygieneRating) /
+            nextCount;
+    final updated = existing.copyWith(
+      tasteRating: double.parse(nextTaste.toStringAsFixed(2)),
+      hygieneRating: double.parse(nextHygiene.toStringAsFixed(2)),
+      reviewCount: nextCount,
+      updatedAt: now,
+    );
+    _demoStalls[stallIdx] = updated;
+    return updated;
   }
 
   bool _matchesCraving(Stall stall, String query) {
