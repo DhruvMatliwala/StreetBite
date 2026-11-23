@@ -9,7 +9,7 @@ import 'package:streetbite/utils/geohash_util.dart';
 import 'package:streetbite/widgets/stall_card.dart';
 import 'package:streetbite/widgets/status_pill.dart';
 
-/// Clean, zero-API-key street map powered by CartoDB/OpenStreetMap tiles & flutter_map.
+/// Clean, zero-API-key street map powered by ArcGIS / Esri basemap tiles & flutter_map.
 class StallMapView extends StatefulWidget {
   const StallMapView({
     super.key,
@@ -187,11 +187,6 @@ class _StallMapViewState extends State<StallMapView> {
     final textTheme = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // CartoDB Voyager / Dark Matter tiles keep roads crisp with minimal POI clutter.
-    final tileUrl = isDark
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
-
     return Stack(
       children: <Widget>[
         Positioned.fill(
@@ -208,11 +203,24 @@ class _StallMapViewState extends State<StallMapView> {
               onTap: (_, __) => setState(() => _selected = null),
             ),
             children: <Widget>[
-              TileLayer(
-                urlTemplate: tileUrl,
-                subdomains: const <String>['a', 'b', 'c', 'd'],
-                userAgentPackageName: 'com.streetbite.app',
-              ),
+              if (!isDark)
+                TileLayer(
+                  urlTemplate:
+                      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+                  userAgentPackageName: 'com.streetbite.app',
+                )
+              else ...<Widget>[
+                TileLayer(
+                  urlTemplate:
+                      'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+                  userAgentPackageName: 'com.streetbite.app',
+                ),
+                TileLayer(
+                  urlTemplate:
+                      'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+                  userAgentPackageName: 'com.streetbite.app',
+                ),
+              ],
               CircleLayer(
                 circles: <CircleMarker>[
                   CircleMarker(
@@ -287,7 +295,7 @@ class _StallMapViewState extends State<StallMapView> {
               borderRadius: BorderRadius.circular(AppRadii.sm),
             ),
             child: Text(
-              '© OSM • CARTO',
+              '© Esri • OpenStreetMap',
               style: textTheme.labelSmall?.copyWith(
                 fontSize: 10.0,
                 color: colorScheme.onSurfaceVariant,
