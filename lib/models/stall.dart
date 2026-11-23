@@ -1,6 +1,113 @@
 import 'package:streetbite/models/menu_item.dart';
 import 'package:streetbite/models/review.dart';
 
+/// Supported shopkeeper special discount windows.
+enum OfferDurationType {
+  hour,
+  day,
+  week,
+  month;
+
+  String get label => switch (this) {
+        OfferDurationType.hour => 'Hourly Deal',
+        OfferDurationType.day => 'Daily Special',
+        OfferDurationType.week => 'Weekly Offer',
+        OfferDurationType.month => 'Monthly Offer',
+      };
+
+  String get shortLabel => switch (this) {
+        OfferDurationType.hour => 'Hourly',
+        OfferDurationType.day => 'Daily',
+        OfferDurationType.week => 'Weekly',
+        OfferDurationType.month => 'Monthly',
+      };
+
+  static OfferDurationType fromName(String? raw) {
+    return OfferDurationType.values.firstWhere(
+      (e) => e.name == raw,
+      orElse: () => OfferDurationType.day,
+    );
+  }
+}
+
+/// Limited-time discount or promo published by a street food vendor.
+class StallOffer {
+  const StallOffer({
+    required this.title,
+    required this.discountPercent,
+    required this.durationType,
+    required this.expiresAt,
+    this.isActive = true,
+  });
+
+  final String title;
+  final int discountPercent;
+  final OfferDurationType durationType;
+  final DateTime expiresAt;
+  final bool isActive;
+
+  bool get isCurrentlyValid => isActive && expiresAt.isAfter(DateTime.now());
+
+  String get discountBadge =>
+      discountPercent > 0 ? '$discountPercent% OFF' : 'SPECIAL DEAL';
+
+  String get remainingTimeLabel {
+    final diff = expiresAt.difference(DateTime.now());
+    if (diff.isNegative) return 'Expired';
+    if (diff.inDays >= 7) {
+      final weeks = (diff.inDays / 7).floor();
+      return 'Ends in ${weeks}w ${diff.inDays % 7}d';
+    }
+    if (diff.inDays >= 1) {
+      return 'Ends in ${diff.inDays}d ${diff.inHours % 24}h';
+    }
+    if (diff.inHours >= 1) {
+      return 'Ends in ${diff.inHours}h ${diff.inMinutes % 60}m';
+    }
+    if (diff.inMinutes >= 1) {
+      return 'Ends in ${diff.inMinutes}m';
+    }
+    return 'Ending soon';
+  }
+
+  factory StallOffer.fromJson(Map<String, dynamic> json) {
+    return StallOffer(
+      title: (json['title'] as String?) ?? '',
+      discountPercent: (json['discountPercent'] as num?)?.toInt() ?? 0,
+      durationType:
+          OfferDurationType.fromName(json['durationType'] as String?),
+      expiresAt: Review.parseFlexibleDateTime(json['expiresAt']),
+      isActive: (json['isActive'] as bool?) ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'title': title,
+      'discountPercent': discountPercent,
+      'durationType': durationType.name,
+      'expiresAt': expiresAt.toIso8601String(),
+      'isActive': isActive,
+    };
+  }
+
+  StallOffer copyWith({
+    String? title,
+    int? discountPercent,
+    OfferDurationType? durationType,
+    DateTime? expiresAt,
+    bool? isActive,
+  }) {
+    return StallOffer(
+      title: title ?? this.title,
+      discountPercent: discountPercent ?? this.discountPercent,
+      durationType: durationType ?? this.durationType,
+      expiresAt: expiresAt ?? this.expiresAt,
+      isActive: isActive ?? this.isActive,
+    );
+  }
+}
+
 /// Represents a hyper-local street food stall or mobile cart.
 class Stall {
   const Stall({
@@ -22,6 +129,7 @@ class Stall {
     this.tasteRating = 4.5,
     this.hygieneRating = 4.3,
     this.reviewCount = 0,
+    this.activeOffer,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -44,10 +152,14 @@ class Stall {
   final double tasteRating;
   final double hygieneRating;
   final int reviewCount;
+  final StallOffer? activeOffer;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   double get overallRating => (tasteRating + hygieneRating) / 2.0;
+
+  bool get hasValidOffer =>
+      activeOffer != null && activeOffer!.isCurrentlyValid;
 
   double? get startingPrice {
     final available = menuItems.where((item) => item.isAvailable).toList();
@@ -61,6 +173,7 @@ class Stall {
     required String name,
     required List<MenuItem> menuItems,
     required List<String> crowdTags,
+    StallOffer? activeOffer,
   }) {
     final tokens = <String>{};
 
@@ -83,6 +196,11 @@ class Stall {
     for (final tag in crowdTags) {
       addTokens(tag);
     }
+    if (activeOffer != null && activeOffer.isCurrentlyValid) {
+      addTokens(activeOffer.title);
+      addTokens(activeOffer.durationType.label);
+      addTokens('discount offer deal');
+    }
     return tokens.take(150).toList();
   }
 
@@ -98,6 +216,13 @@ class Stall {
     final rawSearchable =
         (json['searchableItems'] as List<dynamic>?) ?? const <dynamic>[];
     final rawTags = (json['crowdTags'] as List<dynamic>?) ?? const <dynamic>[];
+
+    final rawOffer = json['activeOffer'];
+    final StallOffer? parsedOffer = rawOffer is Map<String, dynamic>
+        ? StallOffer.fromJson(rawOffer)
+        : (rawOffer is Map
+            ? StallOffer.fromJson(Map<String, dynamic>.from(rawOffer))
+            : null);
 
     return Stall(
       id: (json['id'] as String?) ?? '',
@@ -118,6 +243,7 @@ class Stall {
       tasteRating: (json['tasteRating'] as num?)?.toDouble() ?? 4.5,
       hygieneRating: (json['hygieneRating'] as num?)?.toDouble() ?? 4.3,
       reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
+      activeOffer: parsedOffer,
       createdAt: Review.parseFlexibleDateTime(json['createdAt']),
       updatedAt: Review.parseFlexibleDateTime(json['updatedAt']),
     );
@@ -143,6 +269,7 @@ class Stall {
       'tasteRating': tasteRating,
       'hygieneRating': hygieneRating,
       'reviewCount': reviewCount,
+      'activeOffer': activeOffer?.toJson(),
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -167,6 +294,8 @@ class Stall {
     double? tasteRating,
     double? hygieneRating,
     int? reviewCount,
+    StallOffer? activeOffer,
+    bool clearActiveOffer = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -189,6 +318,7 @@ class Stall {
       tasteRating: tasteRating ?? this.tasteRating,
       hygieneRating: hygieneRating ?? this.hygieneRating,
       reviewCount: reviewCount ?? this.reviewCount,
+      activeOffer: clearActiveOffer ? null : (activeOffer ?? this.activeOffer),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

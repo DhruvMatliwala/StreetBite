@@ -26,6 +26,7 @@ abstract final class MockStallData {
       required double tasteRating,
       required double hygieneRating,
       required int reviewCount,
+      StallOffer? activeOffer,
     }) {
       return Stall(
         id: id,
@@ -45,11 +46,13 @@ abstract final class MockStallData {
           name: name,
           menuItems: menuItems,
           crowdTags: crowdTags,
+          activeOffer: activeOffer,
         ),
         crowdTags: crowdTags,
         tasteRating: tasteRating,
         hygieneRating: hygieneRating,
         reviewCount: reviewCount,
+        activeOffer: activeOffer,
         createdAt: now.subtract(const Duration(days: 14)),
         updatedAt: now.subtract(const Duration(minutes: 25)),
       );
@@ -69,6 +72,12 @@ abstract final class MockStallData {
         operatingHours: '4:30 PM - 11:30 PM',
         bannerImageUrl:
             'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=1000&q=80',
+        activeOffer: StallOffer(
+          title: 'Happy Hour: 20% OFF Kurkure & Tandoori Momos',
+          discountPercent: 20,
+          durationType: OfferDurationType.hour,
+          expiresAt: now.add(const Duration(hours: 3)),
+        ),
         menuItems: const <MenuItem>[
           MenuItem(
             id: 'm1',
@@ -113,6 +122,12 @@ abstract final class MockStallData {
         operatingHours: '7:00 AM - 1:30 PM, 5:00 PM - 9:30 PM',
         bannerImageUrl:
             'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=1000&q=80',
+        activeOffer: StallOffer(
+          title: 'Today Only: 15% OFF Butter Cheese Locho Combo',
+          discountPercent: 15,
+          durationType: OfferDurationType.day,
+          expiresAt: now.add(const Duration(hours: 18)),
+        ),
         menuItems: const <MenuItem>[
           MenuItem(
             id: 'm4',
@@ -156,6 +171,12 @@ abstract final class MockStallData {
         operatingHours: '5:00 PM - 11:00 PM',
         bannerImageUrl:
             'https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=1000&q=80',
+        activeOffer: StallOffer(
+          title: 'Weekly Special: 25% OFF Family Chaat Platter',
+          discountPercent: 25,
+          durationType: OfferDurationType.week,
+          expiresAt: now.add(const Duration(days: 6)),
+        ),
         menuItems: const <MenuItem>[
           MenuItem(
             id: 'm7',
@@ -238,6 +259,12 @@ abstract final class MockStallData {
         operatingHours: '7:00 PM - 3:00 AM',
         bannerImageUrl:
             'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?auto=format&fit=crop&w=1000&q=80',
+        activeOffer: StallOffer(
+          title: 'Monthly Student Pass: 10% OFF Night Maggi & Chai',
+          discountPercent: 10,
+          durationType: OfferDurationType.month,
+          expiresAt: now.add(const Duration(days: 24)),
+        ),
         menuItems: const <MenuItem>[
           MenuItem(
             id: 'm13',

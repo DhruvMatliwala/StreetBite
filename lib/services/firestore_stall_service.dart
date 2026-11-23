@@ -29,6 +29,23 @@ class FirestoreStallService {
     return db.collection('stalls');
   }
 
+  /// Streams live Firestore stall changes so foodies get alerted to new discounts.
+  Stream<List<Stall>> watchLiveStallOffers() {
+    if (isDemoMode) {
+      return const Stream<List<Stall>>.empty();
+    }
+
+    return _stallsRef.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+        return Stall.fromJson(data);
+      }).toList();
+    }).handleError((Object error) {
+      debugPrint('Offer stream notice: $error');
+    });
+  }
+
   /// Queries stalls inside [radiusKm] using geohash bounds + Haversine filter.
   Future<List<StallWithDistance>> fetchNearbyStalls({
     required double userLat,
@@ -36,6 +53,7 @@ class FirestoreStallService {
     required double radiusKm,
     String cravingQuery = '',
     bool openNowOnly = false,
+    bool offersOnly = false,
     StallSortOrder sortOrder = StallSortOrder.distance,
   }) async {
     final List<Stall> candidateStalls;
@@ -83,6 +101,7 @@ class FirestoreStallService {
 
     for (final stall in candidateStalls) {
       if (openNowOnly && !stall.isOpen) continue;
+      if (offersOnly && !stall.hasValidOffer) continue;
 
       final distanceKm = GeohashUtil.haversineDistanceKm(
         userLat,
@@ -184,6 +203,44 @@ class FirestoreStallService {
     }
   }
 
+  /// Publishes or clears a limited-time special discount for [stall].
+  Future<Stall> updateStallOffer({
+    required Stall stall,
+    required StallOffer? offer,
+  }) async {
+    final now = DateTime.now();
+    final updated = stall.copyWith(
+      activeOffer: offer,
+      clearActiveOffer: offer == null,
+      searchableItems: Stall.buildSearchableTokens(
+        name: stall.name,
+        menuItems: stall.menuItems,
+        crowdTags: stall.crowdTags,
+        activeOffer: offer,
+      ),
+      updatedAt: now,
+    );
+
+    if (isDemoMode) {
+      _upsertLocalStall(updated);
+      return updated;
+    }
+
+    try {
+      await _stallsRef.doc(stall.id).update(<String, dynamic>{
+        'activeOffer': offer?.toJson(),
+        'searchableItems': updated.searchableItems,
+        'updatedAt': Timestamp.fromDate(now),
+      });
+      return updated;
+    } catch (e) {
+      debugPrint('Update offer fallback to local state: $e');
+      _hasLocalWrites = true;
+      _upsertLocalStall(updated);
+      return updated;
+    }
+  }
+
   /// Creates or updates a stall document and returns the persisted [Stall].
   Future<Stall> upsertStall(Stall stall) async {
     final now = DateTime.now();
@@ -192,6 +249,7 @@ class FirestoreStallService {
       name: stall.name,
       menuItems: stall.menuItems,
       crowdTags: stall.crowdTags,
+      activeOffer: stall.activeOffer,
     );
 
     final isCreate = stall.id.isEmpty;
@@ -380,6 +438,10 @@ class FirestoreStallService {
     if (stall.name.toLowerCase().contains(query)) return true;
     if (stall.description.toLowerCase().contains(query)) return true;
     if (stall.address.toLowerCase().contains(query)) return true;
+    if (stall.hasValidOffer &&
+        stall.activeOffer!.title.toLowerCase().contains(query)) {
+      return true;
+    }
     for (final token in stall.searchableItems) {
       if (token.toLowerCase().contains(query)) return true;
     }
@@ -414,6 +476,7 @@ class FirestoreStallService {
       'tasteRating': stall.tasteRating,
       'hygieneRating': stall.hygieneRating,
       'reviewCount': stall.reviewCount,
+      'activeOffer': stall.activeOffer?.toJson(),
       'createdAt': Timestamp.fromDate(stall.createdAt),
       'updatedAt': Timestamp.fromDate(stall.updatedAt),
     };

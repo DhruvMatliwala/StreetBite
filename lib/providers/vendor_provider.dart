@@ -5,7 +5,7 @@ import 'package:streetbite/services/firestore_stall_service.dart';
 import 'package:streetbite/services/location_service.dart';
 import 'package:streetbite/services/storage_service.dart';
 
-/// ViewModel managing the Vendor Portal: live open/closed toggle, menus, photos, GPS pin.
+/// ViewModel managing the Vendor Portal: live open/closed toggle, discounts, menus, photos, GPS pin.
 class VendorProvider extends ChangeNotifier {
   VendorProvider({
     required FirestoreStallService stallService,
@@ -87,6 +87,37 @@ class VendorProvider extends ChangeNotifier {
         notifyListeners();
       }
       return false;
+    }
+  }
+
+  /// Publishes or clears a limited-time Hourly/Daily/Weekly/Monthly offer.
+  Future<Stall?> updateStallOffer(
+    Stall stall,
+    StallOffer? offer, {
+    ValueChanged<Stall>? onSynced,
+  }) async {
+    _isSaving = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final updated = await _stallService.updateStallOffer(
+        stall: stall,
+        offer: offer,
+      );
+      final idx = _vendorStalls.indexWhere((s) => s.id == updated.id);
+      if (idx != -1) {
+        _vendorStalls[idx] = updated;
+      }
+      onSynced?.call(updated);
+      return updated;
+    } catch (e) {
+      debugPrint('Failed to update stall offer: $e');
+      _errorMessage = 'Could not update offer. Please retry.';
+      return null;
+    } finally {
+      _isSaving = false;
+      notifyListeners();
     }
   }
 

@@ -24,6 +24,7 @@ rules_version = '2';
 //   - tasteRating: number (required, 0..5) - Aggregate taste rating
 //   - hygieneRating: number (required, 0..5) - Aggregate hygiene rating
 //   - reviewCount: int (required, >= 0) - Total reviews count
+//   - activeOffer: map or null (optional) - Limited-time Hourly/Daily/Weekly/Monthly discount
 //   - createdAt: timestamp (required, immutable) - Creation timestamp
 //   - updatedAt: timestamp (required) - Last update timestamp
 //
@@ -134,6 +135,7 @@ service cloud.firestore {
                'tasteRating',
                'hygieneRating',
                'reviewCount',
+               'activeOffer',
                'createdAt',
                'updatedAt'
              ]) &&
@@ -167,6 +169,7 @@ service cloud.firestore {
              data.hygieneRating <= 5 &&
              data.reviewCount is int &&
              data.reviewCount >= 0 &&
+             (!('activeOffer' in data) || data.activeOffer == null || data.activeOffer is map) &&
              data.createdAt is timestamp &&
              data.updatedAt is timestamp;
     }
