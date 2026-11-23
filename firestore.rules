@@ -1,0 +1,297 @@
+rules_version = '2';
+
+// =============================================================================
+// Assumed Data Model
+// =============================================================================
+//
+// Collection: stalls
+// Document ID: stallId (auto-generated or vendor-defined slug)
+// Fields:
+//   - vendorId: string (required, immutable, 1..128 chars) - Firebase Auth UID
+//   - name: string (required, 2..100 chars) - Stall display name
+//   - description: string (required, 0..600 chars) - Short stall story
+//   - address: string (required, 2..200 chars) - Landmark / street address
+//   - latitude: number (required, -90..90) - GPS latitude
+//   - longitude: number (required, -180..180) - GPS longitude
+//   - geohash: string (required, 1..12 chars) - Base32 geohash prefix index
+//   - isOpen: bool (required) - Live vendor Open/Closed toggle
+//   - operatingHours: string (required, 1..100 chars) - Operating window
+//   - bannerImageUrl: string (required, 0..1000 chars, valid URL or empty)
+//   - galleryUrls: list (required, <= 10 items) - Additional image URLs
+//   - menuItems: list (required, <= 100 items) - Menu item maps
+//   - searchableItems: list (required, <= 150 items) - Lowercase dish tokens
+//   - crowdTags: list (required, <= 15 items) - Community tags
+//   - tasteRating: number (required, 0..5) - Aggregate taste rating
+//   - hygieneRating: number (required, 0..5) - Aggregate hygiene rating
+//   - reviewCount: int (required, >= 0) - Total reviews count
+//   - createdAt: timestamp (required, immutable) - Creation timestamp
+//   - updatedAt: timestamp (required) - Last update timestamp
+//
+// Subcollection: stalls/{stallId}/reviews
+// Document ID: reviewId
+// Fields:
+//   - stallId: string (required, immutable, 1..128 chars)
+//   - authorUid: string (required, immutable, 1..128 chars)
+//   - authorName: string (required, 1..80 chars)
+//   - tasteRating: number (required, 1..5)
+//   - hygieneRating: number (required, 1..5)
+//   - comment: string (required, 0..500 chars)
+//   - createdAt: timestamp (required, immutable)
+//
+// Collection: users
+// Document ID: userId (matches request.auth.uid; strictly private to owner)
+// Fields:
+//   - uid: string (required, immutable, 1..128 chars)
+//   - displayName: string (required, 1..80 chars)
+//   - isVendor: bool (required)
+//   - createdAt: timestamp (required, immutable)
+//   - updatedAt: timestamp (required)
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // Helper Functions
+    // -------------------------------------------------------------------------
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasRequiredFields(data, fields) {
+      return data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(data, fields) {
+      return data.keys().hasOnly(fields);
+    }
+
+    function validStringLength(data, field, minLen, maxLen) {
+      return data[field] is string &&
+             data[field].size() >= minLen &&
+             data[field].size() <= maxLen;
+    }
+
+    function isValidUrl(url) {
+      return url is string &&
+             url.size() <= 1000 &&
+             (url.matches('^https://.*') || url.matches('^http://.*'));
+    }
+
+    function isValidOptionalUrl(data, field) {
+      return data[field] is string &&
+             (data[field].size() == 0 || isValidUrl(data[field]));
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // -------------------------------------------------------------------------
+    // Domain Validators (enforced on both create and update)
+    // -------------------------------------------------------------------------
+    function isValidStall(data) {
+      return hasRequiredFields(data, [
+               'vendorId',
+               'name',
+               'description',
+               'address',
+               'latitude',
+               'longitude',
+               'geohash',
+               'isOpen',
+               'operatingHours',
+               'bannerImageUrl',
+               'galleryUrls',
+               'menuItems',
+               'searchableItems',
+               'crowdTags',
+               'tasteRating',
+               'hygieneRating',
+               'reviewCount',
+               'createdAt',
+               'updatedAt'
+             ]) &&
+             hasOnlyAllowedFields(data, [
+               'vendorId',
+               'name',
+               'description',
+               'address',
+               'latitude',
+               'longitude',
+               'geohash',
+               'isOpen',
+               'operatingHours',
+               'bannerImageUrl',
+               'galleryUrls',
+               'menuItems',
+               'searchableItems',
+               'crowdTags',
+               'tasteRating',
+               'hygieneRating',
+               'reviewCount',
+               'createdAt',
+               'updatedAt'
+             ]) &&
+             validStringLength(data, 'vendorId', 1, 128) &&
+             validStringLength(data, 'name', 2, 100) &&
+             validStringLength(data, 'description', 0, 600) &&
+             validStringLength(data, 'address', 2, 200) &&
+             data.latitude is number &&
+             data.latitude >= -90 &&
+             data.latitude <= 90 &&
+             data.longitude is number &&
+             data.longitude >= -180 &&
+             data.longitude <= 180 &&
+             validStringLength(data, 'geohash', 1, 12) &&
+             data.isOpen is bool &&
+             validStringLength(data, 'operatingHours', 1, 100) &&
+             isValidOptionalUrl(data, 'bannerImageUrl') &&
+             data.galleryUrls is list &&
+             data.galleryUrls.size() <= 10 &&
+             data.menuItems is list &&
+             data.menuItems.size() <= 100 &&
+             data.searchableItems is list &&
+             data.searchableItems.size() <= 150 &&
+             data.crowdTags is list &&
+             data.crowdTags.size() <= 15 &&
+             data.tasteRating is number &&
+             data.tasteRating >= 0 &&
+             data.tasteRating <= 5 &&
+             data.hygieneRating is number &&
+             data.hygieneRating >= 0 &&
+             data.hygieneRating <= 5 &&
+             data.reviewCount is int &&
+             data.reviewCount >= 0 &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidStallRatingAggregation() {
+      return isAuthenticated() &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'tasteRating',
+               'hygieneRating',
+               'reviewCount',
+               'updatedAt'
+             ]) &&
+             request.resource.data.reviewCount == resource.data.reviewCount + 1 &&
+             isValidStall(request.resource.data);
+    }
+
+    function isValidReview(data, stallId) {
+      return hasRequiredFields(data, [
+               'stallId',
+               'authorUid',
+               'authorName',
+               'tasteRating',
+               'hygieneRating',
+               'comment',
+               'createdAt'
+             ]) &&
+             hasOnlyAllowedFields(data, [
+               'stallId',
+               'authorUid',
+               'authorName',
+               'tasteRating',
+               'hygieneRating',
+               'comment',
+               'createdAt'
+             ]) &&
+             data.stallId == stallId &&
+             validStringLength(data, 'authorUid', 1, 128) &&
+             validStringLength(data, 'authorName', 1, 80) &&
+             data.tasteRating is number &&
+             data.tasteRating >= 1 &&
+             data.tasteRating <= 5 &&
+             data.hygieneRating is number &&
+             data.hygieneRating >= 1 &&
+             data.hygieneRating <= 5 &&
+             validStringLength(data, 'comment', 0, 500) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidUser(data, userId) {
+      return hasRequiredFields(data, [
+               'uid',
+               'displayName',
+               'isVendor',
+               'createdAt',
+               'updatedAt'
+             ]) &&
+             hasOnlyAllowedFields(data, [
+               'uid',
+               'displayName',
+               'isVendor',
+               'createdAt',
+               'updatedAt'
+             ]) &&
+             data.uid == userId &&
+             validStringLength(data, 'displayName', 1, 80) &&
+             data.isVendor is bool &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+
+    // Public discovery for street food stalls; vendor-authenticated writes
+    match /stalls/{stallId} {
+      allow read: if true;
+
+      allow create: if isAuthenticated() &&
+                       request.resource.data.vendorId == request.auth.uid &&
+                       isValidStall(request.resource.data);
+
+      allow update: if (isAuthenticated() &&
+                        resource.data.vendorId == request.auth.uid &&
+                        areImmutableFieldsUnchanged(['vendorId', 'createdAt']) &&
+                        isValidStall(request.resource.data)) ||
+                       isValidStallRatingAggregation();
+
+      allow delete: if isAuthenticated() &&
+                       resource.data.vendorId == request.auth.uid;
+
+      match /reviews/{reviewId} {
+        allow read: if true;
+
+        allow create: if isAuthenticated() &&
+                         request.resource.data.authorUid == request.auth.uid &&
+                         isValidReview(request.resource.data, stallId);
+
+        allow update: if isAuthenticated() &&
+                         resource.data.authorUid == request.auth.uid &&
+                         areImmutableFieldsUnchanged(['authorUid', 'stallId', 'createdAt']) &&
+                         isValidReview(request.resource.data, stallId);
+
+        allow delete: if isAuthenticated() &&
+                         resource.data.authorUid == request.auth.uid;
+      }
+    }
+
+    // Private user profiles (owner-only access; no cross-user reads)
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidUser(request.resource.data, userId);
+
+      allow update: if isOwner(userId) &&
+                       areImmutableFieldsUnchanged(['uid', 'createdAt']) &&
+                       isValidUser(request.resource.data, userId);
+
+      allow delete: if isOwner(userId);
+    }
+
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
