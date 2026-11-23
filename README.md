@@ -8,7 +8,7 @@
 
 1. **Hyper-Local Geo-Radius Discovery (1 km – 25 km)**
    - Configurable distance radius slider (default `25 km`) powered by **Base32 Geohash prefix range queries** in Cloud Firestore combined with exact **Haversine distance filtering** (`lib/utils/geohash_util.dart`).
-   - Toggle between **List / Responsive Grid View** and **Interactive Google Maps View** with status-colored markers (Green = Open Now, Grey = Closed) and a radius overlay circle.
+   - Toggle between **List / Responsive Grid View** and an **Interactive Clutter-Free Map View** powered by **CartoDB / OpenStreetMap (`flutter_map`)**—100% free with zero API keys or POI icon clutter—featuring status-colored markers (Green = Open Now, Grey = Closed) and a live radius circle.
    - Sort results by **Nearest Distance** or **Highest Rating**.
 
 2. **Item-Based Craving Search (380 ms Debounced)**
@@ -24,12 +24,11 @@
 
 4. **Stall Details & 1-Tap Turn-by-Turn Navigation**
    - Hero banner image, live status pill, operating hours, crowd tags (e.g., *Late-night spot*, *Pocket friendly*), and split **Taste** & **Hygiene** community ratings.
-   - **1-Tap Navigate** deep-links straight into Google Maps turn-by-turn directions (`url_launcher`) using exact coordinates.
+   - **1-Tap Navigate** deep-links straight into Google Maps turn-by-turn directions (`url_launcher`) using exact coordinates (100% free, no API key required).
    - Interactive community review submission.
 
 5. **Graceful Demo / Fallback Mode**
-   - `Firebase.initializeApp()` is guarded in `main.dart` with `try/catch`.
-   - Even without a `google-services.json` or Google Maps API key, StreetBite boots cleanly into **Demo Mode** preloaded with 8 realistic street food stalls so every screen, search filter, vendor toggle, and stall editor works out of the box.
+   - `Firebase.initializeApp()` is guarded in `main.dart` with `try/catch`, and empty live Firestore queries automatically display curated sample stalls so anyone testing the APK can explore every feature right away.
 
 ---
 
@@ -64,7 +63,7 @@ lib/
 │   ├── distance_radius_slider.dart   # 1-25 km radius slider
 │   ├── menu_item_editor.dart         # Add/edit/remove menu items widget
 │   ├── stall_card.dart               # Material 3 stall summary card
-│   ├── stall_map_view.dart           # Google Maps view + Demo map fallback preview
+│   ├── stall_map_view.dart           # Clean CartoDB/OSM flutter_map view + preview card
 │   ├── stall_shimmer_list.dart       # Shimmer loading placeholders
 │   └── status_pill.dart              # Open / Closed live badge
 ├── screens/
@@ -73,6 +72,7 @@ lib/
 │   ├── profile_screen.dart           # Account, Demo/Live indicator & theme switcher
 │   ├── stall_detail_screen.dart      # Banner, menu, reviews & 1-Tap Navigate
 │   └── vendor_dashboard_screen.dart  # Vendor stall management & live status switch
+├── firebase_options.dart             # FirebaseOptions for project streetbite-c4058
 └── main.dart                         # App entry point, guarded Firebase init & HomeShell
 ```
 
@@ -86,29 +86,6 @@ Because Cloud Firestore supports range queries on only one field at a time, `Geo
 2. **9-Cell Neighbor Bounds**: Encodes the user's location and computes the center cell plus all 8 adjacent cells (`N, NE, E, SE, S, SW, W, NW`) to prevent edge-boundary misses.
 3. **Prefix Range Queries**: Executes parallel Firestore queries `where('geohash', isGreaterThanOrEqualTo: start).where('geohash', isLessThanOrEqualTo: '$end~')` across merged ranges.
 4. **Exact Haversine Pruning**: Deduplicates documents and computes exact great-circle distance in kilometers via `haversineDistanceKm()`, filtering strictly within the user's chosen radius and sorting by distance or rating.
-
----
-
-## 🚀 Getting Started
-
-### Running in Demo Mode (Zero Configuration)
-```bash
-flutter pub get
-flutter run
-```
-Without `google-services.json`, the app automatically initializes in **Demo Mode** with realistic street food data and in-memory vendor updates.
-
-### Connecting Live Firebase & Google Maps
-1. Create a Firebase project and enable **Authentication** (Anonymous / Email-Password), **Cloud Firestore**, and **Firebase Storage**.
-2. Download `google-services.json` into `android/app/google-services.json`.
-3. Deploy the included security rules and composite indexes:
-   ```bash
-   firebase deploy --only firestore:rules,firestore:indexes
-   ```
-4. Provide your Google Maps SDK for Android API key via environment variable when building:
-   ```bash
-   MAPS_API_KEY=your_key_here flutter build apk --release
-   ```
 
 ---
 

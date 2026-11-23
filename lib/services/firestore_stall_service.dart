@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:streetbite/models/review.dart';
 import 'package:streetbite/models/stall.dart';
 import 'package:streetbite/services/mock_stall_data.dart';
@@ -42,28 +43,36 @@ class FirestoreStallService {
       await Future<void>.delayed(const Duration(milliseconds: 220));
       candidateStalls = List<Stall>.from(_demoStalls);
     } else {
-      final ranges = GeohashUtil.queryBounds(userLat, userLng, radiusKm);
-      final futures = ranges.map((range) {
-        Query<Map<String, dynamic>> query = _stallsRef;
-        if (openNowOnly) {
-          query = query.where('isOpen', isEqualTo: true);
-        }
-        return query
-            .where('geohash', isGreaterThanOrEqualTo: range.start)
-            .where('geohash', isLessThanOrEqualTo: range.end)
-            .get();
-      });
+      var liveStalls = <Stall>[];
+      try {
+        final ranges = GeohashUtil.queryBounds(userLat, userLng, radiusKm);
+        final futures = ranges.map((range) {
+          Query<Map<String, dynamic>> query = _stallsRef;
+          if (openNowOnly) {
+            query = query.where('isOpen', isEqualTo: true);
+          }
+          return query
+              .where('geohash', isGreaterThanOrEqualTo: range.start)
+              .where('geohash', isLessThanOrEqualTo: range.end)
+              .get();
+        });
 
-      final snapshots = await Future.wait(futures);
-      final deduplicated = <String, Stall>{};
-      for (final snapshot in snapshots) {
-        for (final doc in snapshot.docs) {
-          final data = Map<String, dynamic>.from(doc.data());
-          data['id'] = doc.id;
-          deduplicated[doc.id] = Stall.fromJson(data);
+        final snapshots = await Future.wait(futures);
+        final deduplicated = <String, Stall>{};
+        for (final snapshot in snapshots) {
+          for (final doc in snapshot.docs) {
+            final data = Map<String, dynamic>.from(doc.data());
+            data['id'] = doc.id;
+            deduplicated[doc.id] = Stall.fromJson(data);
+          }
         }
+        liveStalls = deduplicated.values.toList();
+      } catch (e) {
+        debugPrint('Firestore query fallback to sample stalls: $e');
       }
-      candidateStalls = deduplicated.values.toList();
+
+      candidateStalls =
+          liveStalls.isNotEmpty ? liveStalls : List<Stall>.from(_demoStalls);
     }
 
     final normalizedQuery = cravingQuery.trim().toLowerCase();
