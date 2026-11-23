@@ -13,7 +13,7 @@ import 'package:streetbite/widgets/menu_item_editor.dart';
 import 'package:streetbite/widgets/stall_card.dart';
 import 'package:streetbite/widgets/status_pill.dart';
 
-/// Detailed view of a street food stall with menu, ratings, reviews & 1-tap navigation.
+/// Detailed view of a street food stall with special discounts, menu, ratings, reviews & 1-tap navigation.
 class StallDetailScreen extends StatefulWidget {
   const StallDetailScreen({
     super.key,
@@ -105,6 +105,7 @@ class _StallDetailScreenState extends State<StallDetailScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final offer = _stall.hasValidOffer ? _stall.activeOffer : null;
 
     return Scaffold(
       body: CustomScrollView(
@@ -185,6 +186,10 @@ class _StallDetailScreenState extends State<StallDetailScreen> {
                         icon: Icons.schedule_rounded,
                         label: 'Hours: ${_stall.operatingHours}',
                       ),
+                      if (offer != null) ...<Widget>[
+                        const SizedBox(height: AppSpacing.md),
+                        _SpecialOfferBannerCard(offer: offer),
+                      ],
                       if (_stall.crowdTags.isNotEmpty) ...<Widget>[
                         const SizedBox(height: AppSpacing.md),
                         Wrap(
@@ -365,6 +370,99 @@ class _StallDetailScreenState extends State<StallDetailScreen> {
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpecialOfferBannerCard extends StatelessWidget {
+  const _SpecialOfferBannerCard({required this.offer});
+
+  final StallOffer offer;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xFFE65100), Color(0xFFFF8F00)],
+        ),
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10.0,
+                  vertical: 4.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(AppRadii.pill),
+                ),
+                child: Text(
+                  offer.discountBadge,
+                  style: textTheme.labelMedium?.copyWith(
+                    color: const Color(0xFFBF360C),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10.0,
+                  vertical: 4.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(AppRadii.pill),
+                ),
+                child: Text(
+                  offer.durationType.label,
+                  style: textTheme.labelMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            offer.title,
+            style: textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4.0),
+          Row(
+            children: <Widget>[
+              const Icon(
+                Icons.timer_outlined,
+                size: 15.0,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 4.0),
+              Text(
+                offer.remainingTimeLabel,
+                style: textTheme.labelMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ],
       ),

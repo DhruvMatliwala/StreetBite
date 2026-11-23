@@ -38,8 +38,30 @@ void main() {
       expect(decoded.createdAt.toUtc(), now);
     });
 
-    test('Stall round-trip, computed ratings, startingPrice, and tokens', () {
+    test('StallOffer round-trip and duration labels', () {
+      final futureExpiry = DateTime.now().add(const Duration(days: 7));
+      final offer = StallOffer(
+        title: 'Weekly Special: 25% OFF Chaat',
+        discountPercent: 25,
+        durationType: OfferDurationType.week,
+        expiresAt: futureExpiry,
+      );
+
+      final decoded = StallOffer.fromJson(offer.toJson());
+      expect(decoded.discountBadge, '25% OFF');
+      expect(decoded.durationType, OfferDurationType.week);
+      expect(decoded.durationType.label, 'Weekly Offer');
+      expect(decoded.isCurrentlyValid, isTrue);
+    });
+
+    test('Stall round-trip, computed ratings, startingPrice, and activeOffer', () {
       final now = DateTime.utc(2026, 1, 15, 18, 30);
+      final offer = StallOffer(
+        title: 'Happy Hour 20% OFF Locho',
+        discountPercent: 20,
+        durationType: OfferDurationType.hour,
+        expiresAt: DateTime.now().add(const Duration(hours: 2)),
+      );
       const items = <MenuItem>[
         MenuItem(id: '1', name: 'Butter Locho', price: 70, category: 'Surti'),
         MenuItem(id: '2', name: 'Sev Khamani', price: 60, category: 'Surti'),
@@ -48,6 +70,7 @@ void main() {
         name: 'Gopi Surti Cart',
         menuItems: items,
         crowdTags: const <String>['Pure veg'],
+        activeOffer: offer,
       );
 
       final stall = Stall(
@@ -67,6 +90,7 @@ void main() {
         tasteRating: 4.8,
         hygieneRating: 4.6,
         reviewCount: 12,
+        activeOffer: offer,
         createdAt: now,
         updatedAt: now,
       );
@@ -76,6 +100,7 @@ void main() {
       expect(decoded.menuItems.length, 2);
       expect(decoded.overallRating, closeTo(4.7, 0.001));
       expect(decoded.startingPrice, 60.0);
+      expect(decoded.hasValidOffer, isTrue);
       expect(decoded.searchableItems, contains('locho'));
       expect(decoded.searchableItems, contains('khamani'));
     });

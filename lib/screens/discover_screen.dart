@@ -13,7 +13,7 @@ import 'package:streetbite/widgets/stall_map_view.dart';
 import 'package:streetbite/widgets/stall_shimmer_list.dart';
 import 'package:streetbite/widgets/streetbite_logo.dart';
 
-/// Main discovery screen supporting debounced dish search, geo-radius slider, and List/Map toggle.
+/// Main discovery screen supporting debounced dish search, geo-radius slider, offers, and List/Map toggle.
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({
     super.key,
@@ -57,6 +57,120 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     );
   }
 
+  Future<void> _openDiscountAlertsSheet() async {
+    final stallProvider = context.read<StallProvider>();
+    stallProvider.markAllAlertsRead();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final alerts = stallProvider.discountAlerts;
+        final textTheme = Theme.of(sheetContext).textTheme;
+        final colorScheme = Theme.of(sheetContext).colorScheme;
+
+        return DraggableScrollableSheet(
+          initialChildSize: 0.55,
+          minChildSize: 0.35,
+          maxChildSize: 0.85,
+          expand: false,
+          builder: (_, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.notifications_active_rounded,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'Live Stall Discounts',
+                          style: textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Limited-time hourly, daily, weekly, and monthly deals from nearby carts.',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Expanded(
+                    child: alerts.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No special discounts active yet. Check back soon!',
+                            ),
+                          )
+                        : ListView.separated(
+                            controller: scrollController,
+                            itemCount: alerts.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: AppSpacing.sm),
+                            itemBuilder: (_, index) {
+                              final alert = alerts[index];
+                              return Card(
+                                margin: EdgeInsets.zero,
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor:
+                                        colorScheme.primaryContainer,
+                                    foregroundColor:
+                                        colorScheme.onPrimaryContainer,
+                                    child: const Icon(
+                                      Icons.local_offer_rounded,
+                                    ),
+                                  ),
+                                  title: Text(
+                                    '${alert.offer.discountBadge} • ${alert.stallName}',
+                                    style: textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    '${alert.offer.title}\n'
+                                    '${alert.offer.durationType.label} • ${alert.offer.remainingTimeLabel}',
+                                  ),
+                                  isThreeLine: true,
+                                  trailing: const Icon(
+                                    Icons.chevron_right_rounded,
+                                  ),
+                                  onTap: () {
+                                    Navigator.of(sheetContext).pop();
+                                    final item = stallProvider
+                                        .findStallById(alert.stallId);
+                                    if (item != null && mounted) {
+                                      _openStallDetail(item);
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final stallProvider = context.watch<StallProvider>();
@@ -97,6 +211,15 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           ],
         ),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'Discount alerts',
+            onPressed: _openDiscountAlertsSheet,
+            icon: Badge.count(
+              count: stallProvider.unreadAlertCount,
+              isLabelVisible: stallProvider.unreadAlertCount > 0,
+              child: const Icon(Icons.notifications_outlined),
+            ),
+          ),
           IconButton(
             tooltip: 'Refresh GPS location',
             icon: const Icon(Icons.my_location_rounded),
@@ -176,11 +299,13 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           CravingFilterChips(
             selectedQuery: stallProvider.cravingQuery,
             openNowOnly: stallProvider.openNowOnly,
+            offersOnly: stallProvider.offersOnly,
             onCravingTap: (tag) {
               stallProvider.selectCravingChip(tag);
               _syncSearchFieldText(stallProvider.cravingQuery);
             },
             onOpenNowToggle: stallProvider.toggleOpenNowOnly,
+            onOffersOnlyToggle: stallProvider.toggleOffersOnly,
           ),
           const SizedBox(height: AppSpacing.sm),
           DistanceRadiusSlider(
@@ -224,11 +349,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
               onStallTap: _openStallDetail,
               onResetFilters: () {
                 _searchController.clear();
-                stallProvider.clearSearch();
-                if (stallProvider.openNowOnly) {
-                  stallProvider.toggleOpenNowOnly();
-                }
-                stallProvider.commitRadiusKm(AppGeoDefaults.maxRadiusKm);
+                stallProvider.resetAllFilters();
               },
             ),
           ),
@@ -346,7 +467,7 @@ class _DiscoverBody extends StatelessWidget {
                   padding: const EdgeInsets.all(AppSpacing.md),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: 420.0,
-                    mainAxisExtent: 318.0,
+                    mainAxisExtent: 356.0,
                     crossAxisSpacing: AppSpacing.md,
                     mainAxisSpacing: AppSpacing.md,
                   ),

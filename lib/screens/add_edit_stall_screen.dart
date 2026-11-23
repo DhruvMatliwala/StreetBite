@@ -6,11 +6,12 @@ import 'package:streetbite/models/menu_item.dart';
 import 'package:streetbite/models/stall.dart';
 import 'package:streetbite/providers/auth_provider.dart';
 import 'package:streetbite/providers/vendor_provider.dart';
+import 'package:streetbite/screens/vendor_dashboard_screen.dart';
 import 'package:streetbite/utils/geohash_util.dart';
 import 'package:streetbite/widgets/menu_item_editor.dart';
 import 'package:streetbite/widgets/stall_card.dart';
 
-/// Form screen allowing vendors to register or edit stall details, GPS pin, photo, and menu.
+/// Form screen allowing vendors to register or edit stall details, GPS pin, offer, photo, and menu.
 class AddEditStallScreen extends StatefulWidget {
   const AddEditStallScreen({super.key, this.existingStall});
 
@@ -33,6 +34,7 @@ class _AddEditStallScreenState extends State<AddEditStallScreen> {
   late bool _isOpen;
   late List<MenuItem> _menuItems;
   late Set<String> _selectedCrowdTags;
+  StallOffer? _activeOffer;
   bool _resolvingGps = false;
 
   @override
@@ -55,6 +57,8 @@ class _AddEditStallScreenState extends State<AddEditStallScreen> {
     _menuItems = List<MenuItem>.from(existing?.menuItems ?? const <MenuItem>[]);
     _selectedCrowdTags =
         Set<String>.from(existing?.crowdTags ?? const <String>[]);
+    _activeOffer =
+        existing?.hasValidOffer == true ? existing!.activeOffer : null;
   }
 
   @override
@@ -98,6 +102,16 @@ class _AddEditStallScreenState extends State<AddEditStallScreen> {
     }
   }
 
+  Future<void> _configureOffer() async {
+    final offer = await showOfferBuilderSheet(
+      context,
+      existingOffer: _activeOffer,
+    );
+    if (offer != null && mounted) {
+      setState(() => _activeOffer = offer);
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthProvider>();
@@ -124,11 +138,13 @@ class _AddEditStallScreenState extends State<AddEditStallScreen> {
         name: _nameController.text.trim(),
         menuItems: _menuItems,
         crowdTags: _selectedCrowdTags.toList(),
+        activeOffer: _activeOffer,
       ),
       crowdTags: _selectedCrowdTags.toList(),
       tasteRating: existing?.tasteRating ?? 4.5,
       hygieneRating: existing?.hygieneRating ?? 4.5,
       reviewCount: existing?.reviewCount ?? 0,
+      activeOffer: _activeOffer,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );
@@ -289,6 +305,53 @@ class _AddEditStallScreenState extends State<AddEditStallScreen> {
                                 )
                               : const Icon(Icons.my_location_rounded),
                           label: const Text('Pin Current GPS Location'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Card(
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Special Discount / Offer (Optional)',
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4.0),
+                        Text(
+                          _activeOffer != null
+                              ? '${_activeOffer!.discountBadge} • ${_activeOffer!.durationType.label}: ${_activeOffer!.title}'
+                              : 'Attract nearby foodies with an Hourly, Daily, Weekly, or Monthly discount.',
+                          style: textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Row(
+                          children: <Widget>[
+                            FilledButton.tonalIcon(
+                              onPressed: _configureOffer,
+                              icon: const Icon(Icons.local_offer_outlined),
+                              label: Text(
+                                _activeOffer != null
+                                    ? 'Edit Discount'
+                                    : 'Add Special Discount',
+                              ),
+                            ),
+                            if (_activeOffer != null) ...<Widget>[
+                              const SizedBox(width: AppSpacing.sm),
+                              TextButton(
+                                onPressed: () =>
+                                    setState(() => _activeOffer = null),
+                                child: const Text('Remove'),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),

@@ -88,7 +88,7 @@ class StallImage extends StatelessWidget {
   }
 }
 
-/// Material 3 card presenting a street food stall with distance, dishes, and status.
+/// Material 3 card presenting a street food stall with distance, offers, dishes, and status.
 class StallCard extends StatelessWidget {
   const StallCard({
     super.key,
@@ -102,6 +102,7 @@ class StallCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stall = stallWithDistance.stall;
+    final offer = stall.hasValidOffer ? stall.activeOffer : null;
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final dishHighlights =
@@ -157,6 +158,47 @@ class StallCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (offer != null)
+                  Positioned(
+                    bottom: AppSpacing.sm,
+                    left: AppSpacing.sm,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10.0,
+                        vertical: 5.0,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: <Color>[Color(0xFFE65100), Color(0xFFFF8F00)],
+                        ),
+                        borderRadius: BorderRadius.circular(AppRadii.pill),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 6.0,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          const Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 14.0,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 4.0),
+                          Text(
+                            '${offer.discountBadge} • ${offer.durationType.label}',
+                            style: textTheme.labelSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
             Padding(
@@ -229,6 +271,48 @@ class StallCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (offer != null) ...<Widget>[
+                    const SizedBox(height: AppSpacing.sm),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10.0,
+                        vertical: 6.0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer
+                            .withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(AppRadii.sm),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.local_offer_rounded,
+                            size: 15.0,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 6.0),
+                          Expanded(
+                            child: Text(
+                              offer.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6.0),
+                          Text(
+                            offer.remainingTimeLabel,
+                            style: textTheme.labelSmall?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (dishHighlights.isNotEmpty) ...<Widget>[
                     const SizedBox(height: AppSpacing.sm),
                     Text(
