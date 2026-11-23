@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo/streetbite_logo.svg" width="110" alt="StreetBite Logo" />
+</p>
+
 # StreetBite 🍢🗺️
 
 **StreetBite** is a hyper-local street food discovery and live vendor portal mobile application built with **Flutter** and **Firebase**. It helps foodies discover unlisted street food carts and stalls within a 1–25 km radius, search directly by dish cravings, check real-time open/closed status, and launch 1-tap turn-by-turn navigation—while giving street food vendors a zero-friction portal to toggle availability, manage menus, upload photos, and pin their GPS coordinates.
@@ -65,7 +69,8 @@ lib/
 │   ├── stall_card.dart               # Material 3 stall summary card
 │   ├── stall_map_view.dart           # Clean CartoDB/OSM flutter_map view + preview card
 │   ├── stall_shimmer_list.dart       # Shimmer loading placeholders
-│   └── status_pill.dart              # Open / Closed live badge
+│   ├── status_pill.dart              # Open / Closed live badge
+│   └── streetbite_logo.dart          # Custom vector brand logo widget
 ├── screens/
 │   ├── add_edit_stall_screen.dart    # Vendor stall registration & editing form
 │   ├── discover_screen.dart          # List/Map discovery hub
@@ -89,10 +94,8 @@ Because Cloud Firestore supports range queries on only one field at a time, `Geo
 
 ---
 
-## 🤖 Cloud CI/CD & APK Download
+## 📱 Direct APK Download & CI/CD
 
-Every push to `main` triggers [`.github/workflows/build.yml`](.github/workflows/build.yml), which:
-- Generates the Android Gradle Wrapper
-- Runs `flutter pub get`
-- Runs `flutter analyze` and `flutter test`
-- Builds `app-release.apk` and uploads it as the **`streetbite-release-apk`** GitHub Actions artifact.
+Every push to `main` triggers [`.github/workflows/build.yml`](.github/workflows/build.yml), which runs `flutter analyze`, `flutter test`, builds `StreetBite.apk`, and publishes it directly to GitHub Releases:
+
+- **Direct Phone APK Installer:** `https://github.com/DhruvMatliwala/StreetBite/releases/download/v1.0.0/StreetBite.apk`

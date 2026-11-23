@@ -11,6 +11,7 @@ import 'package:streetbite/widgets/distance_radius_slider.dart';
 import 'package:streetbite/widgets/stall_card.dart';
 import 'package:streetbite/widgets/stall_map_view.dart';
 import 'package:streetbite/widgets/stall_shimmer_list.dart';
+import 'package:streetbite/widgets/streetbite_logo.dart';
 
 /// Main discovery screen supporting debounced dish search, geo-radius slider, and List/Map toggle.
 class DiscoverScreen extends StatefulWidget {
@@ -67,10 +68,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
       appBar: AppBar(
         title: Row(
           children: <Widget>[
-            Icon(
-              Icons.local_fire_department_rounded,
-              color: colorScheme.primary,
-            ),
+            const StreetBiteLogo(size: 30.0),
             const SizedBox(width: AppSpacing.sm),
             const Text(
               'StreetBite',

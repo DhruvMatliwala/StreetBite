@@ -11,6 +11,8 @@ jobs:
   build:
     name: Analyze, Test & Build Release APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -55,9 +57,26 @@ jobs:
           MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
         run: flutter build apk --release
 
+      - name: Prepare Direct Release APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/StreetBite.apk
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: streetbite-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      - name: Publish APK to GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: StreetBite v1.0.0 (Android APK)
+          body: |
+            Direct Android APK installer for **StreetBite**.
+            - Firebase project: `streetbite-c4058`
+            - Clutter-free CartoDB / OpenStreetMap map view (zero API key required)
+            - Custom StreetBite adaptive app icon & Material 3 logo
+          files: build/app/outputs/flutter-apk/StreetBite.apk
+          prerelease: false

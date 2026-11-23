@@ -8,6 +8,7 @@ import 'package:streetbite/providers/vendor_provider.dart';
 import 'package:streetbite/screens/add_edit_stall_screen.dart';
 import 'package:streetbite/widgets/stall_card.dart';
 import 'package:streetbite/widgets/status_pill.dart';
+import 'package:streetbite/widgets/streetbite_logo.dart';
 
 /// Dedicated zero-friction Vendor Portal for toggling availability and managing stalls.
 class VendorDashboardScreen extends StatefulWidget {
@@ -78,9 +79,15 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Vendor Portal',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: const Row(
+          children: <Widget>[
+            StreetBiteLogo(size: 28.0),
+            SizedBox(width: AppSpacing.sm),
+            Text(
+              'Vendor Portal',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ],
         ),
         actions: <Widget>[
           IconButton(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:streetbite/core/constants/app_constants.dart';
 import 'package:streetbite/providers/auth_provider.dart';
+import 'package:streetbite/widgets/streetbite_logo.dart';
 
 /// User & Vendor account screen with Demo/Live mode info and Theme switcher.
 class ProfileScreen extends StatefulWidget {
@@ -30,9 +31,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Profile & Settings',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: const Row(
+          children: <Widget>[
+            StreetBiteLogo(size: 28.0),
+            SizedBox(width: AppSpacing.sm),
+            Text(
+              'Profile & Settings',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ],
         ),
       ),
       body: Center(
