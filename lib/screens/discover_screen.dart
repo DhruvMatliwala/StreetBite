@@ -49,22 +49,19 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     );
   }
 
+  void _syncSearchFieldText(String value) {
+    _searchController.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final stallProvider = context.watch<StallProvider>();
     final authProvider = context.watch<AuthProvider>();
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-
-    if (_searchController.text != stallProvider.cravingQuery &&
-        !FocusScope.of(context).hasFocus) {
-      _searchController.value = TextEditingValue(
-        text: stallProvider.cravingQuery,
-        selection: TextSelection.collapsed(
-          offset: stallProvider.cravingQuery.length,
-        ),
-      );
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -183,7 +180,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             openNowOnly: stallProvider.openNowOnly,
             onCravingTap: (tag) {
               stallProvider.selectCravingChip(tag);
-              _searchController.text = stallProvider.cravingQuery;
+              _syncSearchFieldText(stallProvider.cravingQuery);
             },
             onOpenNowToggle: stallProvider.toggleOpenNowOnly,
           ),

@@ -42,7 +42,7 @@ class StreetBiteApp extends StatelessWidget {
     final storageService = StorageService(isDemoMode: isDemoMode);
 
     return MultiProvider(
-      providers: <ChangeNotifierProvider<ChangeNotifier>>[
+      providers: [
         ChangeNotifierProvider<AuthProvider>(
           create: (_) => AuthProvider(isDemoMode: isDemoMode),
         ),
